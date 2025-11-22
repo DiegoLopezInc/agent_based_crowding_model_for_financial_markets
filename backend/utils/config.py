@@ -13,6 +13,30 @@ from pydantic_settings import BaseSettings
 load_dotenv()
 
 
+class FineTuningTrainingConfig(BaseModel):
+    """Fine-tuning training configuration"""
+    epochs: int = 3
+    batch_size: int = 16
+    learning_rate: float = 2e-5
+    warmup_steps: int = 100
+    evaluation_steps: int = 500
+    save_steps: int = 500
+    margin: float = 0.5
+    distance_metric: str = "cosine"
+    positive_samples_per_stock: int = 5
+    negative_samples_per_stock: int = 5
+    hard_negative_ratio: float = 0.3
+    output_dir: str = "models/fine_tuning_checkpoints"
+    logging_dir: str = "logs/fine_tuning"
+
+
+class FineTuningConfig(BaseModel):
+    """Fine-tuning configuration"""
+    enabled: bool = False
+    fine_tuned_model_path: str = "models/fine_tuned_embeddings"
+    training: FineTuningTrainingConfig = Field(default_factory=FineTuningTrainingConfig)
+
+
 class EmbeddingConfig(BaseModel):
     """Embedding model configuration"""
     provider: str = "huggingface"
@@ -20,6 +44,7 @@ class EmbeddingConfig(BaseModel):
     embedding_dimension: int = 384
     batch_size: int = 32
     max_length: int = 512
+    fine_tuning: FineTuningConfig = Field(default_factory=FineTuningConfig)
 
 
 class AgentConfig(BaseModel):
@@ -56,6 +81,8 @@ class ETFConfig(BaseModel):
     """ETF configuration"""
     primary: str = "QQQ"
     focus_sector: str = "AI"
+    opposite_etf: Optional[str] = "VYM"
+    opposite_etf_stocks: List[str] = []
     additional_etfs: List[str] = []
     qqq_ai_stocks: List[str] = []
 

@@ -9,6 +9,33 @@ embedding:
   batch_size: 32
   max_length: 512
 
+  # Fine-tuning configuration
+  fine_tuning:
+    enabled: false  # Set to true to use fine-tuned model
+    fine_tuned_model_path: "models/fine_tuned_embeddings"
+
+    # Training parameters
+    training:
+      epochs: 3
+      batch_size: 16
+      learning_rate: 2e-5
+      warmup_steps: 100
+      evaluation_steps: 500
+      save_steps: 500
+
+      # Contrastive learning parameters
+      margin: 0.5  # Margin for contrastive loss
+      distance_metric: "cosine"  # "cosine" or "euclidean"
+
+      # Data sampling
+      positive_samples_per_stock: 5  # Pairs from same stock
+      negative_samples_per_stock: 5  # Pairs from opposite ETF
+      hard_negative_ratio: 0.3  # Ratio of hard negatives (similar but different stocks)
+
+      # Output
+      output_dir: "models/fine_tuning_checkpoints"
+      logging_dir: "logs/fine_tuning"
+
 # Agent Configuration
 agent:
   provider: "anthropic"  # Options: "anthropic", "openai"
@@ -31,11 +58,38 @@ database:
 etfs:
   primary: "QQQ"
   focus_sector: "AI"  # AI-correlated stocks in QQQ
+
+  # Opposite ETF for contrastive learning (negative examples)
+  opposite_etf: "VYM"  # Vanguard High Dividend Yield (value/dividend focus, opposite of growth tech)
+  # Alternative opposite ETFs:
+  # - "XLE" (Energy sector)
+  # - "XLU" (Utilities sector)
+  # - "VTV" (Value stocks)
+  # - "IWN" (Small cap value)
+
+  opposite_etf_stocks:
+    - "JNJ"    # Johnson & Johnson (Healthcare)
+    - "PG"     # Procter & Gamble (Consumer Staples)
+    - "JPM"    # JPMorgan Chase (Financials)
+    - "XOM"    # Exxon Mobil (Energy)
+    - "CVX"    # Chevron (Energy)
+    - "KO"     # Coca-Cola (Consumer Staples)
+    - "PEP"    # PepsiCo (Consumer Staples)
+    - "WMT"    # Walmart (Consumer Staples)
+    - "VZ"     # Verizon (Telecom)
+    - "T"      # AT&T (Telecom)
+    - "MRK"    # Merck (Healthcare)
+    - "PFE"    # Pfizer (Healthcare)
+    - "UNH"    # UnitedHealth (Healthcare)
+    - "BAC"    # Bank of America (Financials)
+    - "WFC"    # Wells Fargo (Financials)
+
   additional_etfs:
     - "SPY"
     - "ARKK"
     - "BOTZ"
     - "ROBO"
+
   # QQQ AI stocks to focus on
   qqq_ai_stocks:
     - "NVDA"

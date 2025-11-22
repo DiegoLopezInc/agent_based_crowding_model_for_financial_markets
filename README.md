@@ -7,6 +7,7 @@ A comprehensive agentic Retrieval-Augmented Generation (RAG) system for research
 ### Backend
 - **PostgreSQL Vector Database**: Powered by pgvector for semantic search
 - **HuggingFace Embeddings**: Free, local embedding generation
+- **Fine-Tuning with Contrastive Learning**: Improve embeddings using positive/negative pairs from opposite ETFs
 - **Data Pipeline**: Automated ingestion of stock data, news, and earnings
 - **MCP Server**: FastAPI-based server for database interaction
 - **Agentic RAG**: LangChain-powered agent with specialized financial tools
@@ -123,6 +124,25 @@ python scripts/query_agent.py "Compare NVDA and AMD in AI capabilities" --mode a
 # With evaluation
 python scripts/query_agent.py "What AI stocks should I research?" --mode rag --evaluate
 ```
+
+### 8. (Optional) Fine-Tune Embeddings
+
+Improve embedding quality using contrastive learning:
+
+```bash
+# 1. Ingest opposite ETF data (for negative examples)
+for ticker in JNJ PG XOM CVX KO; do
+    python scripts/run_ingestion.py --ticker $ticker
+done
+
+# 2. Run fine-tuning
+python scripts/fine_tune_embeddings.py
+
+# 3. If results are good, enable in config.yaml:
+#    embedding.fine_tuning.enabled: true
+```
+
+See [FINE_TUNING_GUIDE.md](FINE_TUNING_GUIDE.md) for details.
 
 ## 📊 Architecture
 

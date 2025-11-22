@@ -24,6 +24,30 @@ class EmbeddingModel:
 
     def _load_model(self):
         """Load the embedding model"""
+        # Check if fine-tuned model should be used
+        if self.config.fine_tuning.enabled:
+            from pathlib import Path
+            fine_tuned_path = self.config.fine_tuning.fine_tuned_model_path
+
+            if Path(fine_tuned_path).exists():
+                logger.info(f"Loading fine-tuned embedding model: {fine_tuned_path}")
+                logger.info(f"Using device: {self.device}")
+
+                try:
+                    self.model = SentenceTransformer(
+                        fine_tuned_path,
+                        device=self.device
+                    )
+                    logger.info("Fine-tuned embedding model loaded successfully")
+                    return
+                except Exception as e:
+                    logger.error(f"Failed to load fine-tuned model: {e}")
+                    logger.warning("Falling back to base model")
+            else:
+                logger.warning(f"Fine-tuned model not found at {fine_tuned_path}")
+                logger.warning("Falling back to base model")
+
+        # Load base model
         logger.info(f"Loading embedding model: {self.config.model_name}")
         logger.info(f"Using device: {self.device}")
 
