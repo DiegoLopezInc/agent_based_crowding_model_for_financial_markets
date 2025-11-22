@@ -1,0 +1,121 @@
+# Agentic RAG for ETF Stock Research - Configuration File
+
+# Embedding Model Configuration
+embedding:
+  provider: "huggingface"
+  model_name: "sentence-transformers/all-MiniLM-L6-v2"  # Fast, efficient model for financial text
+  # Alternative: "BAAI/bge-large-en-v1.5" for better quality
+  embedding_dimension: 384
+  batch_size: 32
+  max_length: 512
+
+# Agent Configuration
+agent:
+  provider: "anthropic"  # Options: "anthropic", "openai"
+  model_name: "claude-sonnet-4-5-20250929"  # Primary model
+  temperature: 0.1
+  max_tokens: 4096
+  timeout: 60
+
+# Database Configuration
+database:
+  host: "localhost"
+  port: 5432
+  database: "etf_research"
+  user: "postgres"
+  password: "${POSTGRES_PASSWORD}"  # Set via environment variable
+  pool_size: 10
+  max_overflow: 20
+
+# ETF Configuration
+etfs:
+  primary: "QQQ"
+  focus_sector: "AI"  # AI-correlated stocks in QQQ
+  additional_etfs:
+    - "SPY"
+    - "ARKK"
+    - "BOTZ"
+    - "ROBO"
+  # QQQ AI stocks to focus on
+  qqq_ai_stocks:
+    - "NVDA"
+    - "MSFT"
+    - "GOOGL"
+    - "META"
+    - "AAPL"
+    - "AMZN"
+    - "TSLA"
+    - "AMD"
+    - "AVGO"
+    - "QCOM"
+    - "ADBE"
+    - "CRM"
+    - "INTC"
+    - "ORCL"
+    - "CSCO"
+
+# Data Pipeline Configuration
+data_pipeline:
+  chunk_size: 1000
+  chunk_overlap: 200
+  min_chunk_size: 100
+  sources:
+    - name: "yahoo_finance"
+      enabled: true
+      api_key: "${YAHOO_FINANCE_API_KEY}"
+    - name: "alpha_vantage"
+      enabled: true
+      api_key: "${ALPHA_VANTAGE_API_KEY}"
+    - name: "financial_news"
+      enabled: true
+      rss_feeds:
+        - "https://feeds.reuters.com/reuters/businessNews"
+        - "https://www.cnbc.com/id/100003114/device/rss/rss.html"
+  update_frequency: "daily"  # Options: "realtime", "hourly", "daily"
+
+# Cost Monitoring
+cost_monitoring:
+  enabled: true
+  max_daily_cost: 10.0  # USD
+  max_embedding_cost: 5.0  # USD per day
+  max_agent_cost: 5.0  # USD per day
+  alert_threshold: 0.8  # Alert at 80% of max
+  log_file: "logs/cost_tracking.jsonl"
+
+# Logging Configuration
+logging:
+  level: "INFO"  # DEBUG, INFO, WARNING, ERROR
+  format: "json"
+  output_dir: "logs"
+  retention_days: 30
+  enable_console: true
+  enable_file: true
+
+# RAG Configuration
+rag:
+  top_k: 5
+  similarity_threshold: 0.7
+  rerank: true
+  rerank_top_k: 3
+  use_hyde: false  # Hypothetical Document Embeddings
+
+# Agent Evaluation
+evaluation:
+  enabled: true
+  metrics:
+    - "relevance"
+    - "accuracy"
+    - "completeness"
+  reward_function:
+    relevance_weight: 0.5
+    accuracy_weight: 0.3
+    completeness_weight: 0.2
+  validation_budget: 2.0  # USD for Tinker validation
+
+# MCP Server Configuration
+mcp_server:
+  host: "0.0.0.0"
+  port: 8000
+  workers: 4
+  reload: false
+  log_level: "info"
