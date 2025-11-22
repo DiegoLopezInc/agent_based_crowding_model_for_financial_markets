@@ -342,6 +342,212 @@ async def get_cost_summary(days: int = Query(7, ge=1, le=90)):
         raise HTTPException(status_code=500, detail=str(e))
 
 
+@app.post("/exposure/compute")
+async def compute_exposure_matrices(
+    etf: str = Query(..., description="ETF ticker"),
+    lookback_days: int = Query(252, description="Lookback period in days"),
+    n_factors: int = Query(5, description="Number of factors for PCA")
+):
+    """Compute exposure matrices for an ETF
+
+    Args:
+        etf: ETF ticker
+        lookback_days: Number of days to look back
+        n_factors: Number of factors for idiosyncratic analysis
+
+    Returns:
+        Computation results
+    """
+    try:
+        from backend.exposure.holdings_fetcher import get_holdings_fetcher
+        from backend.exposure.matrix_calculator import get_matrix_calculator
+        from datetime import date, timedelta
+
+        # Fetch holdings and prices
+        fetcher = get_holdings_fetcher()
+        tickers = fetcher.get_holdings_tickers(etf)
+
+        if not tickers:
+            raise HTTPException(status_code=404, detail=f"No holdings found for {etf}")
+
+        # Fetch prices
+        fetcher.fetch_and_save_etf_prices(etf, lookback_days)
+
+        # Compute matrices
+        calculator = get_matrix_calculator()
+        end_date = date.today()
+        start_date = end_date - timedelta(days=lookback_days)
+
+        result = calculator.compute_and_save_matrices(
+            etf, tickers, start_date, end_date, n_factors
+        )
+
+        return result
+
+    except Exception as e:
+        logger.error(f"Failed to compute exposure matrices: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/exposure/matrix/{etf}")
+async def get_exposure_matrix(
+    etf: str,
+    matrix_type: str = Query("correlation", description="Matrix type: correlation, covariance, idiosyncratic"),
+    max_age_days: int = Query(7, description="Max age of cached matrix in days")
+):
+    """Get computed exposure matrix for an ETF
+
+    Args:
+        etf: ETF ticker
+        matrix_type: Type of matrix
+        max_age_days: Maximum age of cached data
+
+    Returns:
+        Matrix data
+    """
+    try:
+        from backend.exposure.matrix_calculator import get_matrix_calculator
+
+        calculator = get_matrix_calculator()
+        matrix_data = calculator.get_cached_matrix(etf, matrix_type, max_age_days)
+
+        if not matrix_data:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Matrix not found. Run /exposure/compute first."
+            )
+
+        return {
+            "etf": etf,
+            "matrix_type": matrix_type,
+            "tickers": matrix_data['tickers'],
+            "matrix": matrix_data['matrix'].tolist(),
+            "params": matrix_data['params'],
+            "date_range": {
+                "start": matrix_data['start_date'].isoformat(),
+                "end": matrix_data['end_date'].isoformat()
+            },
+            "created_at": matrix_data['created_at'].isoformat()
+        }
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get exposure matrix: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/exposure/compare/{etf1}/{etf2}")
+async def compare_etfs(
+    etf1: str,
+    etf2: str,
+    matrix_type: str = Query("correlation", description="Matrix type to use for comparison"),
+    max_age_days: int = Query(7, description="Max age of cached matrices")
+):
+    """Compare two ETFs using exposure matrices
+
+    Args:
+        etf1: First ETF
+        etf2: Second ETF
+        matrix_type: Matrix type to use
+        max_age_days: Max age of cached data
+
+    Returns:
+        Comparison results with similarity score and comparison matrix
+    """
+    try:
+        from backend.exposure.comparison_engine import get_comparison_engine
+
+        engine = get_comparison_engine()
+        result = engine.compare_etfs(etf1, etf2, matrix_type, max_age_days)
+
+        if not result.get('success'):
+            raise HTTPException(status_code=404, detail=result.get('error'))
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to compare ETFs: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/exposure/pairwise/{etf}/{ticker1}/{ticker2}")
+async def get_pairwise_exposure(
+    etf: str,
+    ticker1: str,
+    ticker2: str,
+    max_age_days: int = Query(7, description="Max age of cached data")
+):
+    """Get pairwise exposure between two stocks
+
+    Args:
+        etf: ETF containing both stocks
+        ticker1: First ticker
+        ticker2: Second ticker
+        max_age_days: Max age of cached data
+
+    Returns:
+        Pairwise exposure metrics
+    """
+    try:
+        from backend.exposure.comparison_engine import get_comparison_engine
+
+        engine = get_comparison_engine()
+        result = engine.get_pairwise_comparison(etf, ticker1, ticker2, max_age_days)
+
+        if not result:
+            raise HTTPException(
+                status_code=404,
+                detail=f"Pairwise exposure not found for {ticker1}-{ticker2} in {etf}"
+            )
+
+        return result
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to get pairwise exposure: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
+@app.get("/exposure/similar/{etf}/{ticker}")
+async def get_similar_stocks(
+    etf: str,
+    ticker: str,
+    metric: str = Query("correlation", description="Metric to use: correlation, idiosyncratic_score, etc."),
+    top_n: int = Query(10, ge=1, le=50, description="Number of results")
+):
+    """Get stocks most similar to a given stock
+
+    Args:
+        etf: ETF
+        ticker: Target ticker
+        metric: Metric to rank by
+        top_n: Number of results
+
+    Returns:
+        List of similar stocks with scores
+    """
+    try:
+        from backend.exposure.comparison_engine import get_comparison_engine
+
+        engine = get_comparison_engine()
+        similar = engine.get_stock_similarity_ranking(etf, ticker, metric, top_n)
+
+        return {
+            "etf": etf,
+            "ticker": ticker,
+            "metric": metric,
+            "similar_stocks": similar
+        }
+
+    except Exception as e:
+        logger.error(f"Failed to get similar stocks: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+
 if __name__ == "__main__":
     import uvicorn
     config = get_config()

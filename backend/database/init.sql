@@ -165,6 +165,103 @@ INSERT INTO etf_holdings (etf, ticker, is_ai_related) VALUES
     ('QQQ', 'CSCO', true)
 ON CONFLICT (etf, ticker) DO NOTHING;
 
+-- Stock price history table: for exposure calculations
+CREATE TABLE IF NOT EXISTS stock_prices (
+    id SERIAL PRIMARY KEY,
+    ticker VARCHAR(10) NOT NULL,
+    date DATE NOT NULL,
+    open FLOAT,
+    high FLOAT,
+    low FLOAT,
+    close FLOAT,
+    adjusted_close FLOAT,
+    volume BIGINT,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(ticker, date)
+);
+
+-- ETF composition snapshots: track holdings over time
+CREATE TABLE IF NOT EXISTS etf_composition_snapshots (
+    id SERIAL PRIMARY KEY,
+    etf VARCHAR(10) NOT NULL,
+    snapshot_date DATE NOT NULL,
+    holdings JSONB NOT NULL, -- Array of {ticker, weight, shares}
+    total_holdings INTEGER,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(etf, snapshot_date)
+);
+
+-- Exposure matrices: cached correlation/covariance matrices
+CREATE TABLE IF NOT EXISTS exposure_matrices (
+    id SERIAL PRIMARY KEY,
+    etf VARCHAR(10) NOT NULL,
+    matrix_type VARCHAR(50) NOT NULL, -- 'correlation', 'covariance', 'idiosyncratic'
+    tickers TEXT[] NOT NULL, -- Ordered list of tickers in matrix
+    matrix_data JSONB NOT NULL, -- Serialized matrix
+    computation_params JSONB, -- Parameters used (lookback period, etc.)
+    start_date DATE,
+    end_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(etf, matrix_type, start_date, end_date)
+);
+
+-- Pairwise exposure comparisons: cached pairwise comparisons
+CREATE TABLE IF NOT EXISTS pairwise_exposures (
+    id SERIAL PRIMARY KEY,
+    etf VARCHAR(10) NOT NULL,
+    ticker1 VARCHAR(10) NOT NULL,
+    ticker2 VARCHAR(10) NOT NULL,
+    correlation FLOAT,
+    covariance FLOAT,
+    idiosyncratic_score FLOAT, -- How different they are
+    common_factor_exposure FLOAT, -- Shared market exposure
+    specific_exposure FLOAT, -- Stock-specific component
+    computation_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(etf, ticker1, ticker2, computation_date)
+);
+
+-- ETF comparison matrices: compare two ETFs
+CREATE TABLE IF NOT EXISTS etf_comparisons (
+    id SERIAL PRIMARY KEY,
+    etf1 VARCHAR(10) NOT NULL,
+    etf2 VARCHAR(10) NOT NULL,
+    comparison_matrix JSONB NOT NULL, -- Cross-ETF exposure matrix
+    common_tickers TEXT[], -- Tickers in both ETFs
+    etf1_only_tickers TEXT[], -- Tickers only in ETF1
+    etf2_only_tickers TEXT[], -- Tickers only in ETF2
+    similarity_score FLOAT, -- Overall similarity metric
+    computation_date DATE,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(etf1, etf2, computation_date)
+);
+
+-- Create indexes for exposure tables
+CREATE INDEX IF NOT EXISTS idx_stock_prices_ticker ON stock_prices(ticker);
+CREATE INDEX IF NOT EXISTS idx_stock_prices_date ON stock_prices(date DESC);
+CREATE INDEX IF NOT EXISTS idx_stock_prices_ticker_date ON stock_prices(ticker, date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_etf_snapshots_etf ON etf_composition_snapshots(etf);
+CREATE INDEX IF NOT EXISTS idx_etf_snapshots_date ON etf_composition_snapshots(snapshot_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_exposure_matrices_etf ON exposure_matrices(etf);
+CREATE INDEX IF NOT EXISTS idx_exposure_matrices_type ON exposure_matrices(matrix_type);
+CREATE INDEX IF NOT EXISTS idx_exposure_matrices_dates ON exposure_matrices(start_date, end_date);
+
+CREATE INDEX IF NOT EXISTS idx_pairwise_etf ON pairwise_exposures(etf);
+CREATE INDEX IF NOT EXISTS idx_pairwise_tickers ON pairwise_exposures(ticker1, ticker2);
+CREATE INDEX IF NOT EXISTS idx_pairwise_date ON pairwise_exposures(computation_date DESC);
+
+CREATE INDEX IF NOT EXISTS idx_etf_comp_etfs ON etf_comparisons(etf1, etf2);
+CREATE INDEX IF NOT EXISTS idx_etf_comp_date ON etf_comparisons(computation_date DESC);
+
+-- Trigger for exposure_matrices updated_at
+CREATE TRIGGER update_exposure_matrices_updated_at
+    BEFORE UPDATE ON exposure_matrices
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
+
 -- Grant permissions
 GRANT ALL PRIVILEGES ON ALL TABLES IN SCHEMA etf_research TO postgres;
 GRANT ALL PRIVILEGES ON ALL SEQUENCES IN SCHEMA etf_research TO postgres;
